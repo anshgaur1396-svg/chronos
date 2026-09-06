@@ -1,5 +1,11 @@
 package chronos
 
+const (
+	statusOwes   = "owes"
+	statusCredit = "credit"
+	statusNone   = "none"
+)
+
 type Plan struct {
 	Name       string
 	PricePaisa int64
@@ -31,4 +37,33 @@ func roundHalfUp(pricePaisa, remainingDays, totalDays int64) int64 {
 	}
 
 	return quotient
+}
+
+func calculateProration(inputRequest ProrationRequest) ProrationResponse {
+	var outputResponse ProrationResponse
+
+	remainingDays := inputRequest.TotalDays - inputRequest.UsedDays
+
+	oldRemainingPaisa := roundHalfUp(inputRequest.OldPlan.PricePaisa, remainingDays, inputRequest.TotalDays)
+	newRemainingPaisa := roundHalfUp(inputRequest.NewPlan.PricePaisa, remainingDays, inputRequest.TotalDays)
+
+	adjustmentPaisa := newRemainingPaisa - oldRemainingPaisa
+
+	var adjustmentStatus string
+
+	if adjustmentPaisa < 0 {
+		adjustmentStatus = statusCredit
+	} else if adjustmentPaisa == 0 {
+		adjustmentStatus = statusNone
+	} else {
+		adjustmentStatus = statusOwes
+	}
+
+	outputResponse.SubscriptionID = inputRequest.SubscriptionID
+	outputResponse.OldRemainingPaisa = oldRemainingPaisa
+	outputResponse.NewRemainingPaisa = newRemainingPaisa
+	outputResponse.AdjustmentPaisa = adjustmentPaisa
+	outputResponse.AdjustmentStatus = adjustmentStatus
+
+	return outputResponse
 }
