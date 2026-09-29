@@ -25,3 +25,11 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
 }
+
+func NewRouter() *http.ServeMux {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("GET /v1/health", healthHandler)
+
+	return mux
+}

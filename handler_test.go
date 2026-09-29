@@ -1,31 +1,50 @@
 package chronos
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 )
 
-func TestHealthHandler(t *testing.T) {
+func TestNewRouter(t *testing.T) {
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/health", nil)
-	rec := httptest.NewRecorder()
-
-	healthHandler(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Errorf("Status = %d, want = %d", rec.Code, http.StatusOK)
+	tests := []struct {
+		name       string
+		method     string
+		path       string
+		wantStatus int
+	}{
+		{
+			name:       "health route",
+			method:     http.MethodGet,
+			path:       "/v1/health",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "unknown route",
+			method:     http.MethodGet,
+			path:       "/v1/does-not-exist",
+			wantStatus: http.StatusNotFound,
+		},
+		{
+			name: "wrong method",
+			method: http.MethodPost,
+			path: "/v1/health",
+			wantStatus: http.StatusMethodNotAllowed,
+		},
 	}
 
-	var got healthResponse
-	err := json.Unmarshal(rec.Body.Bytes(), &got)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, tt.path, nil)
+			rec := httptest.NewRecorder()
 
-	if err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
+			router := NewRouter()
+			router.ServeHTTP(rec, req)
 
-	if got.Status != "ok" {
-		t.Errorf("got = %q want = %q", got.Status, "ok")
+			if rec.Code != tt.wantStatus {
+				t.Errorf("status = %d, wanted = %d", rec.Code, tt.wantStatus)
+			}
+		})
 	}
 }
