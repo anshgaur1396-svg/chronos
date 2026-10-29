@@ -63,3 +63,161 @@ func TestCalculateProration(t *testing.T) {
 		})
 	}
 }
+
+func TestValidate(t *testing.T) {
+	tests := []struct {
+		name       string
+		req        ProrationRequest
+		wantErrMsg string
+	}{
+		{
+			name: "valid request with normal values",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "",
+		},
+		{
+			name: "valid request with zero prices (free plans)",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Free", PricePaisa: 0},
+				NewPlan:        Plan{Name: "Pro", PricePaisa: 0},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "",
+		},
+		{
+			name: "empty subscription ID",
+			req: ProrationRequest{
+				SubscriptionID: "",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "subscription_id is required",
+		},
+		{
+			name: "empty old plan name",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "old_plan.name is required",
+		},
+		{
+			name: "empty new plan name",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "new_plan.name is required",
+		},
+		{
+			name: "total days is zero",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      0,
+				UsedDays:       0,
+			},
+			wantErrMsg: "total_days must be greater than 0",
+		},
+		{
+			name: "total days is negative",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      -5,
+				UsedDays:       0,
+			},
+			wantErrMsg: "total_days must be greater than 0",
+		},
+		{
+			name: "used days is negative",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       -1,
+			},
+			wantErrMsg: "used_days cannot be negative",
+		},
+		{
+			name: "used days exceeds total days",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       31,
+			},
+			wantErrMsg: "used_days cannot exceed total_days",
+		},
+		{
+			name: "negative total days and positive used days proves validation order",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      -5,
+				UsedDays:       3,
+			},
+			wantErrMsg: "total_days must be greater than 0",
+		},
+		{
+			name: "negative old plan price",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: -100},
+				NewPlan:        Plan{Name: "New", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "old_plan.price_paisa cannot be negative",
+		},
+		{
+			name: "negative new plan price",
+			req: ProrationRequest{
+				SubscriptionID: "sub_123",
+				OldPlan:        Plan{Name: "Old", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "New", PricePaisa: -100},
+				TotalDays:      30,
+				UsedDays:       10,
+			},
+			wantErrMsg: "new_plan.price_paisa cannot be negative",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validate(tt.req)
+
+			if tt.wantErrMsg == "" {
+				if err != nil {
+					t.Errorf("validate() expected no error, got %v", err)
+				}
+			} else {
+				if err == nil {
+					t.Errorf("validate() expected error %q, got nil", tt.wantErrMsg)
+				} else if err.Error() != tt.wantErrMsg {
+					t.Errorf("validate() error = %q, wantErrMsg %q", err.Error(), tt.wantErrMsg)
+				}
+			}
+		})
+	}
+}
