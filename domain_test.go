@@ -202,6 +202,28 @@ func TestValidate(t *testing.T) {
 			},
 			wantErrMsg: "new_plan.price_paisa cannot be negative",
 		},
+		{
+			name: "zero days used is valid",
+			req: ProrationRequest{
+				SubscriptionID: "sub_zero",
+				OldPlan:        Plan{Name: "Basic", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "Pro", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       0,
+			},
+			wantErrMsg: "",
+		},
+		{
+			name: "all days used is valid",
+			req: ProrationRequest{
+				SubscriptionID: "sub_full",
+				OldPlan:        Plan{Name: "Basic", PricePaisa: 10000},
+				NewPlan:        Plan{Name: "Pro", PricePaisa: 20000},
+				TotalDays:      30,
+				UsedDays:       30,
+			},
+			wantErrMsg: "",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

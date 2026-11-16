@@ -1,6 +1,9 @@
 package chronos
 
-import "errors"
+import (
+	"errors"
+	"math/big"
+)
 
 const (
 	statusOwes   = "owes"
@@ -29,47 +32,66 @@ type ProrationResponse struct {
 	AdjustmentStatus  string `json:"adjustment_status"`
 }
 
-// roundHalfUp assumes totalDays > 0; callers must validate this beforehand.
+// roundHalfUp assumes valid nonnegative prices, 0 <= remainingDays <= totalDays,
+// and totalDays > 0. big.Int prevents intermediate multiplication overflow.
 func roundHalfUp(pricePaisa, remainingDays, totalDays int64) int64 {
-	numerator := pricePaisa * remainingDays
-	quotient := numerator / totalDays
-	remainder := numerator % totalDays
-	if remainder*2 >= totalDays {
-		quotient++
+	numerator := new(big.Int).Mul(
+		big.NewInt(pricePaisa),
+		big.NewInt(remainingDays),
+	)
+
+	denominator := big.NewInt(totalDays)
+
+	quotient := new(big.Int)
+	remainder := new(big.Int)
+
+	quotient.QuoRem(numerator, denominator, remainder)
+
+	// Round half up when 2 * remainder >= denominator.
+	twiceRemainder := new(big.Int).Lsh(remainder, 1)
+
+	if twiceRemainder.Cmp(denominator) >= 0 {
+		quotient.Add(quotient, big.NewInt(1))
 	}
 
-	return quotient
+	return quotient.Int64()
 }
 
 func calculateProration(inputRequest ProrationRequest) ProrationResponse {
-	var outputResponse ProrationResponse
-
 	remainingDays := inputRequest.TotalDays - inputRequest.UsedDays
 
-	oldRemainingPaisa := roundHalfUp(inputRequest.OldPlan.PricePaisa, remainingDays, inputRequest.TotalDays)
-	newRemainingPaisa := roundHalfUp(inputRequest.NewPlan.PricePaisa, remainingDays, inputRequest.TotalDays)
+	oldRemainingPaisa := roundHalfUp(
+		inputRequest.OldPlan.PricePaisa,
+		remainingDays,
+		inputRequest.TotalDays,
+	)
+
+	newRemainingPaisa := roundHalfUp(
+		inputRequest.NewPlan.PricePaisa,
+		remainingDays,
+		inputRequest.TotalDays,
+	)
 
 	adjustmentPaisa := newRemainingPaisa - oldRemainingPaisa
 
-	var adjustmentStatus string
+	adjustmentStatus := statusOwes
 
 	if adjustmentPaisa < 0 {
 		adjustmentStatus = statusCredit
 	} else if adjustmentPaisa == 0 {
 		adjustmentStatus = statusNone
-	} else {
-		adjustmentStatus = statusOwes
 	}
 
-	outputResponse.SubscriptionID = inputRequest.SubscriptionID
-	outputResponse.OldRemainingPaisa = oldRemainingPaisa
-	outputResponse.NewRemainingPaisa = newRemainingPaisa
-	outputResponse.AdjustmentPaisa = adjustmentPaisa
-	outputResponse.AdjustmentStatus = adjustmentStatus
-
-	return outputResponse
+	return ProrationResponse{
+		SubscriptionID:    inputRequest.SubscriptionID,
+		OldRemainingPaisa: oldRemainingPaisa,
+		NewRemainingPaisa: newRemainingPaisa,
+		AdjustmentPaisa:   adjustmentPaisa,
+		AdjustmentStatus:  adjustmentStatus,
+	}
 }
 
+// validate checks the order of the request made
 func validate(req ProrationRequest) error {
 	if req.SubscriptionID == "" {
 		return errors.New("subscription_id is required")

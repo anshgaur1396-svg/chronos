@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -208,5 +209,57 @@ func TestProrateHandlerValidationError(t *testing.T) {
 	if body.Message != "subscription_id is required" {
 		t.Errorf("message = %q, want %q",
 			body.Message, "subscription_id is required")
+	}
+}
+
+func TestProrateHandlerRejectsTrailingJSON(t *testing.T) {
+	body := `{
+		"subscription_id": "sub_123",
+		"old_plan": {"name": "Basic", "price_paisa": 10000},
+		"new_plan": {"name": "Pro", "price_paisa": 20000},
+		"total_days": 30,
+		"used_days": 10
+	} {}`
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/prorate", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	NewRouter().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestProrateHandlerRejectsUnknownFields(t *testing.T) {
+	body := `{
+		"subscription_id": "sub_123",
+		"unexpected_field": "unexpected",
+		"old_plan": {"name": "Basic", "price_paisa": 10000},
+		"new_plan": {"name": "Pro", "price_paisa": 20000},
+		"total_days": 30,
+		"used_days": 10
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/prorate", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	NewRouter().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+func TestProrateHandlerRejectsOversizedBody(t *testing.T) {
+	body := strings.Repeat(" ", maxRequestBodySize+1)
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/prorate", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	NewRouter().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected status %d, got %d", http.StatusRequestEntityTooLarge, rec.Code)
 	}
 }
